@@ -72,7 +72,7 @@ with c4: st.markdown(f'<div class="metric-card"><h2>🤖 AI</h2><p>Smart Search<
 st.divider()
 
 # TABS - OLD + NEW COMBINED
-tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔍 Random AI Search", "🥗 Diet Food", "👶 Kids Food", "⚡ Low Calorie & Protein", "⏱️ Quick & Dashboard"])
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(["🔍 Random AI Search", "🥗 Diet Food", "👶 Kids Food", "⚡ Low Calorie & Protein", "⏱️ Quick & Dashboard", "🎲 5 Random Ingredients Magic"])
 
 with tab1:
     st.markdown("#### 👨‍🍳 Enter Random Ingredients (Old Feature)")
@@ -157,3 +157,61 @@ with tab4:
 with tab5:
     st.markdown("### ⏱️ Quick Recipes & Full List")
     st.dataframe(df[[name_col, ing_col, cal_col if cal_col in df.columns else name_col]].head(50), use_container_width=True, hide_index=True)
+    with tab6:
+    st.markdown("### 🎲 5 Random Ingredients = 1 Magic Recipe!")
+    st.caption("Click pannu da, AI 5 ingredients eduthu pudhusa oru recipe create pannum!")
+
+    all_ingredients_pool = ["tomato", "onion", "egg", "chicken", "rice", "potato", "paneer", "cheese", "bread", "milk", "oats", "banana", "curd", "spinach", "mushroom", "capsicum", "carrot", "garlic", "butter", "corn"]
+
+    if st.button("🎯 Give Me 5 Random Ingredients & Make Recipe!", type="primary", use_container_width=True):
+        picked = random.sample(all_ingredients_pool, 5)
+        st.session_state['picked_5'] = picked
+
+    if 'picked_5' in st.session_state:
+        picked = st.session_state['picked_5']
+
+        # Show 5 ingredients stylish ah
+        st.markdown("#### 🧾 Your 5 Magic Ingredients:")
+        cols = st.columns(5)
+        emojis = ["🍅","🧅","🥚","🍗","🍚","🥔","🧀","🍞","🥛","🍌"]
+        for i, ing in enumerate(picked):
+            with cols[i]:
+                st.markdown(f'<div class="metric-card"><h3>{random.choice(emojis)}</h3><b>{ing.title()}</b></div>', unsafe_allow_html=True)
+
+        st.divider()
+
+        # AI RECIPE GENERATION LOGIC
+        dish_name = f"{picked[0].title()} {picked[1].title()} {picked[2].title()} Delight"
+
+        st.balloons()
+        st.markdown(f"""
+        <div class="recipe-card" style="border-left-color:#9C27B0; border:2px solid #9C27B0">
+            <h2>✨ AI Chef Created: {dish_name} 👨‍🍳</h2>
+            <span class="badge badge-cal">🔥 320 kcal</span>
+            <span class="badge badge-pro">💪 18g Protein</span>
+            <span class="badge badge-time">⏱️ 15 min</span>
+            <span class="badge badge-veg">🤖 AI Generated</span>
+            <hr>
+            <p><b>🎲 Random 5 Ingredients Used:</b> <span style="color:#FF4B4B; font-weight:700">{', '.join([p.title() for p in picked])}</span></p>
+
+            <h4>👩‍🍳 How to Cook (AI Generated):</h4>
+            <p>
+            <b>Step 1:</b> Kada la 2 spoon oil vittu <b>{picked[1]}</b> and <b>{picked[3] if len(picked)>3 else 'garlic'}</b> ah golden brown vara vathakku.<br>
+            <b>Step 2:</b> Ippo <b>{picked[0]}</b> and <b>{picked[2]}</b> add panni 2 min saute pannu.<br>
+            <b>Step 3:</b> <b>{picked[4]}</b> add panni, salt, pepper, chilli powder, garam masala potu mix pannu.<br>
+            <b>Step 4:</b> Konjam thanni vittu 10 min medium flame la cook pannu.<br>
+            <b>Step 5:</b> Mela coriander leaves thooti, hot ah serve pannu. <b>{dish_name}</b> ready da! 😋
+            </p>
+
+            <h4>💡 Chef Tip:</h4>
+            <p style="background:#F3E5F5; padding:10px; border-radius:10px">Itha <b>{picked[0]} rice</b> kooda illa <b>{picked[1]} roti</b> kooda sapta semma taste ah irukkum!</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Also search similar from dataset
+        st.markdown("#### 🔍 Similar Recipes from Database:")
+        df['score'] = df[ing_col].apply(lambda v: sum(1 for p in picked if p in str(v).lower()))
+        similar = df[df['score']>0].sort_values('score', ascending=False).head(3)
+        if len(similar)>0:
+            for _,r in similar.iterrows():
+                st.markdown(f'<div class="recipe-card"><h5>🍲 {r[name_col]} - {int(r["score"])}/5 matched</h5><p>{str(r[ing_col])[:150]}...</p></div>', unsafe_allow_html=True)
