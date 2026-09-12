@@ -7,7 +7,18 @@ st.markdown("<p style='text-align:center'>Enter your ingredients, AI will find t
 
 @st.cache_data
 def load_data():
-    return pd.read_csv("recipes.csv", encoding='latin1')
+    try:
+        # CSV try pannum, thappu lines ah skip pannidum
+        return pd.read_csv("recipes.csv", encoding='latin1', on_bad_lines='skip', engine='python')
+    except:
+        try:
+            # CSV illa na Excel ah try pannum (nee rename panna file)
+            return pd.read_excel("recipes.csv")
+        except:
+            # Rendume illa na vera file thedum
+            import glob
+            f = glob.glob("**/*.xlsx", recursive=True)[0]
+            return pd.read_excel(f)
 
 df = load_data()
 name_col = [c for c in df.columns if 'Recipe' in c][0] if any('Recipe' in c for c in df.columns) else df.columns[1]
