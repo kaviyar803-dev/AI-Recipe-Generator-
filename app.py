@@ -1,66 +1,89 @@
 import streamlit as st
 import pandas as pd
 import random
+import glob
 
 st.set_page_config(page_title="AI RECIPE GENERATOR", page_icon="🍛", layout="wide")
 st.markdown("<h1 style='text-align:center;color:#FF4B4B;'>🍛 AI RECIPE GENERATOR</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;'>En kitta enna ingredients irukko adha potta, AI unakku recipe eduthu tharum!</p>", unsafe_allow_html=True)
 
 @st.cache_data
 def load_data():
+    # File-a auto kandupidikkum
     try:
-        df = pd.read_csv("recipes.csv")
+        files = glob.glob("**/*.csv", recursive=True)
+        for f in files:
+            try:
+                df = pd.read_csv(f)
+                if len(df) > 10: # Correct file
+                    return df
+            except:
+                continue
+        # xlsx try pannum
+        files = glob.glob("**/*.xlsx", recursive=True)
+        for f in files:
+            try:
+                df = pd.read_excel(f)
+                if len(df) > 10:
+                    return df
+            except:
+                continue
     except:
-        import glob
-        f = glob.glob("**/recipes.*", recursive=True)[0]
-        df = pd.read_csv(f) if f.endswith(".csv") else pd.read_excel(f)
-    return df
+        pass
+    return pd.DataFrame()
 
 df = load_data()
 
-# --- AI SEARCH BOX ---
-st.markdown("### 👨‍🍳 Enna Ingredients Irukku?")
-col1, col2 = st.columns([3,1])
-with col1:
-    user_input = st.text_input("", placeholder="Ex: tomato, egg, onion, rice, chicken... random ah type pannu da", label_visibility="collapsed")
-with col2:
-    search = st.button("🔍 AI Recipe Thedu", use_container_width=True, type="primary")
+if df.empty:
+    st.error("recipes.csv file kedaikala da! Check pannu")
+    st.stop()
 
-if search and user_input:
-    ings = [i.strip().lower() for i in user_input.split(",")]
+# --- AUTO FIND COLUMNS - ithan trick da! ---
+cols = [c.lower() for c in df.columns]
+# Name column kandupidikkum
+name_col = next((c for c in df.columns if 'recipe' in c.lower() or c.lower()=='name'), df.columns[1])
+# Ingredients column kandupidikkum
+ing_col = next((c for c in df.columns if 'ingred' in c.lower()), None)
+if not ing_col:
+    ing_col = next((c for c in df.columns if 'main' in c.lower()), df.columns[2])
 
-    # AI Matching Logic
-    def match_score(recipe_ings):
-        recipe_ings = str(recipe_ings).lower()
-        score = sum(1 for i in ings if i in recipe_ings)
-        return score
+st.write(f"DEBUG: Using columns -> Name: `{name_col}`, Ingredients: `{ing_col}`") # Ithu work aana aprom delete pannidalam
 
-    df['match_score'] = df['Main Ingredients'].apply(match_score) if 'Main Ingredients' in df.columns else df['Ingredients'].apply(match_score)
-    matched = df[df['match_score']>0].sort_values(by='match_score', ascending=False).head(6)
+# --- MAIN AI BOX ---
+st.markdown("### 👨‍🍳 Un kitta enna irukku? Type pannu da")
+user_input = st.text_input("", placeholder="Ex: tomato, egg, onion, rice...")
 
-    if len(matched) > 0:
-        st.success(f"🤖 AI Found {len(matched)} recipes for: **{user_input}**")
-        for _, row in matched.iterrows():
-            with st.container(border=True):
-                st.subheader(f"🍲 {row.get('Recipe Name', row.get('name','Custom Recipe'))}")
-                c1, c2, c3 = st.columns(3)
-                c1.metric("Calories", f"{row.get('Calories (kcal)','~250')} kcal")
-                c2.metric("Protein", f"{row.get('Protein (g)','~12')}g")
-                c3.metric("Time", f"{row.get('Cook Time (min)', row.get('cook_time_min',20))} min")
-                st.write(f"**Ingredients:** {row.get('Ingredients', row.get('Main Ingredients',''))}")
-                st.write(f"**Region:** {row.get('Region / Cuisine','Indian')} | **Diet:** {row.get('Diet Type','Veg')}")
+if st.button("🔍 AI Recipe Thedu", type="primary"):
+    if not user_input:
+        st.warning("Edhavathu type pannu da!")
     else:
-        # AI Creates New Recipe if no match
-        st.warning("Exact match illa da, aana AI pudhusa oru recipe create panniduchu!")
-        with st.container(border=True):
-            new_name = f"{' '.join([i.title() for i in ings[:2]])} Special Fry"
-            st.subheader(f"✨ AI Generated: {new_name}")
-            st.write(f"**Un Ingredients:** {user_input}")
-            st.write(f"**Seimura:** 1. {ings[0].title()} ah cut pannu. 2. Oil la onion, tomato pottu vathakku. 3. {', '.join(ings)} ellam pottu 10 mins cook pannu. 4. Salt, pepper potta super {new_name} ready!")
-            st.metric("Estimated Calories", f"{random.randint(200,400)} kcal")
-            st.balloons()
+        ings = [i.strip().lower() for i in user_input.split(",") if i.strip()!=""]
 
+        # Matching
+        def get_score(val):
+            val = str(val).lower()
+            return sum(1 for i in ings if i in val)
+
+        df['score'] = df[ing_col].apply(get_score)
+        matched = df[df['score']>0].sort_values('score', ascending=False).head(6)
+
+        if len(matched) > 0:
+            st.success(f"AI Found {len(matched)} recipes for {user_input}")
+            for _, r in matched.iterrows():
+                with st.container(border=True):
+                    st.subheader(f"🍲 {r[name_col]}")
+                    st.write(f"**Ingredients:** {r[ing_col]}")
+                    # vera info iruntha kaamikkum
+                    if 'Region / Cuisine' in df.columns:
+                        st.caption(f"Region: {r['Region / Cuisine']} | Diet: {r.get('Diet Type','')}")
+        else:
+            st.warning("Exact match illa da, AI pudhusa create pannuthu!")
+            with st.container(border=True):
+                new_name = f"{' '.join([x.title() for x in ings[:2]])} Masala Special"
+                st.subheader(f"✨ AI Generated: {new_name}")
+                st.write(f"**Un ingredients:** {user_input}")
+                steps = f"1. Kadai la oil vittu onion ah vathakku.\n2. {', '.join(ings)} add pannu.\n3. Salt, chilli, garam masala pottu 10 min cook pannu.\n4. Kothamalli thooti serve pannu - {new_name} ready da!"
+                st.write(steps)
+                st.balloons()
 else:
-    st.info("👆 Mela ingredients type panni 'AI Recipe Thedu' button ah click pannu da")
-    st.subheader(f"📚 Total {len(df)} Recipes Available - Scroll panni paaru")
-    st.dataframe(df.head(50), use_container_width=True)
+    st.info("Mela ingredients potu button click pannu da")
+    st.dataframe(df.head(30), use_container_width=True)
